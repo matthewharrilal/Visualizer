@@ -24,7 +24,6 @@ class MetalView: MTKView {
         
         isPaused = false
         enableSetNeedsDisplay = false
-        preferredFramesPerSecond = 60  // Target 60 FPS
         
         createPipelineState()
     }

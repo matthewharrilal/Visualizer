@@ -28,7 +28,7 @@ float2 rotate(float2 p, float a) {
 }
 
 // Function to map 3D points to fractal space with embedded metaballs
-float map(float3 p, float time, MetaBall balls[NUM_BALLS]) {
+float map(float3 p, float time, thread MetaBall *balls) {
     for (int i = 0; i < 8; ++i) {
         float t = time * 0.2;
         p.xz = rotate(p.xz, t);
@@ -37,7 +37,6 @@ float map(float3 p, float time, MetaBall balls[NUM_BALLS]) {
         p.xz -= 0.5;
     }
     
-    // Integrate metaballs into the fractal space
     float d = dot(sign(p), p) / 5.0;
     for (int i = 0; i < NUM_BALLS; i++) {
         float3 ballPos = float3(balls[i].pos, 0.0);
@@ -48,7 +47,7 @@ float map(float3 p, float time, MetaBall balls[NUM_BALLS]) {
 }
 
 // Function to perform ray marching with embedded metaballs
-float4 rayMarchFractal(float3 ro, float3 rd, float time, MetaBall balls[NUM_BALLS]) {
+float4 rayMarchFractal(float3 ro, float3 rd, float time, thread MetaBall* balls) {
     float t = 0.0;
     float3 col = float3(0.0);
     float d;
