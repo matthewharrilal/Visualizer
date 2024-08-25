@@ -20,10 +20,11 @@ class MetalView: MTKView {
         commandQueue = device?.makeCommandQueue()
         
         colorPixelFormat = .bgra8Unorm
-        clearColor = MTLClearColor(red: 1, green: 1, blue: 1, alpha: 1) // Set the background color to white
+        clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         
         isPaused = false
         enableSetNeedsDisplay = false
+        preferredFramesPerSecond = 60  // Target 60 FPS
         
         createPipelineState()
     }

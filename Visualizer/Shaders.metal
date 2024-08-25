@@ -3,8 +3,6 @@ using namespace metal;
 
 #define AA 2
 #define NUM_BALLS 6
-#define GLOW_INTENSITY 0.07
-#define LIGHT_SPEED 0.3
 
 struct VertexOut {
     float4 position [[position]];
@@ -17,66 +15,59 @@ struct MetaBall {
     float3 col;
 };
 
-float4 BallSDF(MetaBall ball, float2 uv) {
-    float dst = ball.r / length(uv - ball.pos);
-    return float4(ball.col * dst, dst);
+// Function to create a color palette
+float3 palette(float d) {
+    return mix(float3(0.2, 0.7, 0.9), float3(1.0, 0.0, 1.0), d);
 }
 
-float3 renderMetaBall(float2 uv, float time) {
-    MetaBall balls[NUM_BALLS];
+// Function to rotate a 2D vector
+float2 rotate(float2 p, float a) {
+    float c = cos(a);
+    float s = sin(a);
+    return p * float2x2(c, s, -s, c);
+}
 
-    // Initialize metaballs with dynamic properties
-    for (int i = 0; i < NUM_BALLS; i++) {
-        float angle = time * (0.5 + 0.1 * float(i));
-        balls[i].pos = 0.5 * float2(sin(angle + float(i) * 2.0), cos(angle + float(i) * 2.0));
-        balls[i].r = 0.3 + 0.1 * sin(time * 2.0 + float(i) * 3.0);
-        balls[i].col = 0.5 + 0.5 * float3(
-            sin(time + float(i) * 0.5),
-            cos(time + float(i) * 0.5),
-            sin(time + float(i) * 0.5 + 3.14)
-        );
+// Function to map 3D points to fractal space with embedded metaballs
+float map(float3 p, float time, MetaBall balls[NUM_BALLS]) {
+    for (int i = 0; i < 8; ++i) {
+        float t = time * 0.2;
+        p.xz = rotate(p.xz, t);
+        p.xy = rotate(p.xy, t * 1.89);
+        p.xz = abs(p.xz);
+        p.xz -= 0.5;
     }
-
-    // Calculate color and distance for each metaball
-    float3 color = float3(0.0);
-    float totalDistance = 0.0;
-
+    
+    // Integrate metaballs into the fractal space
+    float d = dot(sign(p), p) / 5.0;
     for (int i = 0; i < NUM_BALLS; i++) {
-        float4 ball = BallSDF(balls[i], uv);
-        color += ball.rgb;
-        totalDistance += ball.a;
+        float3 ballPos = float3(balls[i].pos, 0.0);
+        float ballDist = length(p - ballPos) - balls[i].r;
+        d = min(d, ballDist);
     }
-
-    float threshold = totalDistance > 4.0 ? 1.0 : 0.0;
-    color = mix(float3(0.0), color, threshold);
-
-    return color;
+    return d;
 }
 
-float3 addLightEffects(float3 color, float2 uv, float time) {
-    // Dynamic light sources that move around the scene
-    float2 lightPos1 = 0.3 * float2(sin(time * LIGHT_SPEED), cos(time * LIGHT_SPEED));
-    float2 lightPos2 = 0.3 * float2(cos(time * LIGHT_SPEED * 1.3), sin(time * LIGHT_SPEED * 1.5));
-
-    // Calculate light influence
-    float dist1 = length(uv - lightPos1);
-    float dist2 = length(uv - lightPos2);
-
-    // Add a glow effect around the light sources
-    float glow1 = GLOW_INTENSITY / dist1;
-    float glow2 = GLOW_INTENSITY / dist2;
-
-    // Combine the light and glow effects
-    color += float3(1.0, 0.8, 0.6) * glow1;
-    color += float3(0.6, 0.8, 1.0) * glow2;
-
-    // Slight pulse effect on the light color
-    float pulse = 0.5 + 0.5 * sin(time * 2.0);
-    color *= pulse;
-
-    return color;
+// Function to perform ray marching with embedded metaballs
+float4 rayMarchFractal(float3 ro, float3 rd, float time, MetaBall balls[NUM_BALLS]) {
+    float t = 0.0;
+    float3 col = float3(0.0);
+    float d;
+    for (int i = 0; i < 64; i++) {
+        float3 p = ro + rd * t;
+        d = map(p, time, balls) * 0.5;
+        if (d < 0.02) {
+            break;
+        }
+        if (d > 100.0) {
+            break;
+        }
+        col += palette(length(p) * 0.1) / (400.0 * d);
+        t += d;
+    }
+    return float4(col, 1.0 / (d * 100.0));
 }
 
+// Vertex function for standard full-screen quad
 vertex VertexOut vertex_main(uint vertexID [[vertex_id]]) {
     float2 positions[4] = {
         float2(-1, -1),
@@ -91,36 +82,32 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]]) {
     return out;
 }
 
+// Fragment function that combines fractal and metaballs into a unified effect
 fragment float4 fragment_main(VertexOut in [[stage_in]],
                               constant float &time [[buffer(0)]],
                               constant float2 &resolution [[buffer(1)]]) {
     float2 uv = (in.uv * resolution) / resolution.y;
+    
+    // Create the metaballs to be used in the fractal
+    MetaBall balls[NUM_BALLS];
+    for (int i = 0; i < NUM_BALLS; i++) {
+        float angle = time * (0.4 + 0.1 * float(i));
+        balls[i].pos = 0.5 * float2(sin(angle + float(i) * 2.0), cos(angle + float(i) * 2.0));
+        balls[i].r = 0.25 + 0.1 * sin(time * 2.0 + float(i) * 2.0);
+        balls[i].col = palette(i * 0.1);
+    }
 
-    // Create a smooth gradient background that changes over time
-    float3 backgroundColor = float3(0.5 + 0.5 * sin(time * 0.5), 0.5 + 0.5 * cos(time * 0.5), 1.0);
-    
-    float3 col = float3(0.);
+    // Create the fractal pyramid effect with integrated metaballs
+    float3 ro = float3(0.0, 0.0, -50.0);
+    ro.xz = rotate(ro.xz, time);
+    float3 cf = normalize(-ro);
+    float3 cs = normalize(cross(cf, float3(0.0, 1.0, 0.0)));
+    float3 cu = normalize(cross(cf, cs));
+    float3 uuv = ro + cf * 3.0 + uv.x * cs + uv.y * cu;
+    float3 rd = normalize(uuv - ro);
 
-    // Anti-aliasing and metaball rendering
-    #if AA
-        float uvs = 1. / max(resolution.x, resolution.y);
-       
-        for (int i = -AA; i < AA; ++i) {
-            for (int j = -AA; j < AA; ++j) {
-                col += renderMetaBall(uv + float2(i, j) * (uvs / float(AA)), time) / (4.0 * float(AA) * float(AA));
-            }
-        }
-    #else
-        col = renderMetaBall(uv, time);
-    #endif
-    
-    // Add dynamic light and glow effects
-    col = addLightEffects(col, uv, time);
-    
-    // Blend the metaballs with the dynamic gradient background
-    float alpha = max(col.r, max(col.g, col.b));
-    alpha = smoothstep(0.0, 1.0, alpha * 1.5);
-    col = mix(backgroundColor, col, alpha);
-    
-    return float4(col, 1.0);
+    // Perform ray marching and combine effects
+    float4 color = rayMarchFractal(ro, rd, time, balls);
+
+    return color;
 }
