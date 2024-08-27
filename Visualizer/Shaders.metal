@@ -2,7 +2,7 @@
 using namespace metal;
 
 #define AA 2
-#define NUM_BALLS 6
+#define NUM_BALLS 6 // Ensure this is defined
 
 struct VertexOut {
     float4 position [[position]];
@@ -84,7 +84,8 @@ vertex VertexOut vertex_main(uint vertexID [[vertex_id]]) {
 // Fragment function that combines fractal and metaballs into a unified effect
 fragment float4 fragment_main(VertexOut in [[stage_in]],
                               constant float &time [[buffer(0)]],
-                              constant float2 &resolution [[buffer(1)]]) {
+                              constant float2 &resolution [[buffer(1)]],
+                              constant float *audioData [[buffer(2)]]) {
     float2 uv = (in.uv * resolution) / resolution.y;
     
     // Create the metaballs to be used in the fractal
@@ -92,7 +93,7 @@ fragment float4 fragment_main(VertexOut in [[stage_in]],
     for (int i = 0; i < NUM_BALLS; i++) {
         float angle = time * (0.4 + 0.1 * float(i));
         balls[i].pos = 0.5 * float2(sin(angle + float(i) * 2.0), cos(angle + float(i) * 2.0));
-        balls[i].r = 0.25 + 0.1 * sin(time * 2.0 + float(i) * 2.0);
+        balls[i].r = 0.25 + audioData[i] * 0.5; // React to audio data
         balls[i].col = palette(i * 0.1);
     }
 

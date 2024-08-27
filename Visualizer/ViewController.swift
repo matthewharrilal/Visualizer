@@ -9,7 +9,7 @@ class MTViewController: UIViewController {
         }
         
         // Initialize MetalView with the frame of the view and the device
-        let metalView = MetalView(frame: .zero, device: device)
+        let metalView = MetaVisualizerView(frame: .zero, device: device)
         metalView.translatesAutoresizingMaskIntoConstraints = false
         return metalView
     }()
